@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>音の記憶 - Echo Canvas (Neon)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      font-family: sans-serif;
+    }
+    #startButton {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(90deg, #00ffff, #ff00ff, #00ff00);
+      border: none;
+      color: white;
+      padding: 20px 40px;
+      font-size: 22px;
+      cursor: pointer;
+      border-radius: 50px;
+      text-shadow: 0 0 10px #fff;
+      animation: glow 2s infinite linear;
+    }
+    @keyframes glow {
+      0% { box-shadow: 0 0 10px #00ffff; }
+      50% { box-shadow: 0 0 30px #ff00ff; }
+      100% { box-shadow: 0 0 10px #00ffff; }
+    }
+  </style>
+</head>
+<body>
+  <button id="startButton">▶ 音の記憶をはじめる</button>
+  <script>
+    let synth;
+    let particles = [];
+    let chords = [
+      ["C4", "E4", "G4"],
+      ["A3", "C4", "E4"],
+      ["F3", "A3", "C4"],
+      ["G3", "B3", "D4"],
+      ["D4", "F4", "A4"]
+    ];
+    let lastNoteTime = 0;
+    let started = false;
+
+    document.getElementById("startButton").addEventListener("click", async () => {
+      await Tone.start();
+      started = true;
+      document.getElementById("startButton").style.display = "none";
+      console.log("AudioContext started");
+      startSketch();
+    });
+
+    function startSketch() {
+      new p5((p) => {
+        p.setup = () => {
+          p.createCanvas(p.windowWidth, p.windowHeight);
+          p.background(0);
+
+          synth = new Tone.PolySynth(Tone.Synth).toDestination();
+          synth.set({
+            envelope: { attack: 0.05, release: 1.5 },
+            oscillator: { type: "sine" }
+          });
+        };
+
+        p.draw = () => {
+          p.background(0, 25); // 残像効果
+          for (let part of particles) {
+            part.update();
+            part.show(p);
+          }
+          particles = particles.filter(part => !part.done);
+        };
+
+        p.mouseMoved = () => {
+          if (!started) return;
+          let now = p.millis();
+          if (now - lastNoteTime > 120) {
+            playChord(p.mouseX, p.mouseY);
+            lastNoteTime = now;
+          }
+          particles.push(new Particle(p.mouseX, p.mouseY));
+        };
+
+        p.windowResized = () => {
+          p.resizeCanvas(p.windowWidth, p.windowHeight);
+        };
+
+        function playChord(x, y) {
+          let idx = Math.floor(p.map(x, 0, p.width, 0, chords.length));
+          idx = p.constrain(idx, 0, chords.length - 1);
+          let chord = chords[idx];
+          synth.triggerAttackRelease(chord, "8n");
+        }
+
+        class Particle {
+          constructor(x, y) {
+            this.pos = p.createVector(x, y);
+            this.vel = p5.Vector.random2D().mult(1.5);
+            this.alpha = 255;
+            // ゲーミングカラーっぽく：紫・シアン・ピンク・黄緑系
+            let colors = [
+              [0, 255, 255],
+              [255, 0, 255],
+              [0, 255, 128],
+              [255, 128, 0],
+              [128, 0, 255]
+            ];
+            let c = colors[Math.floor(Math.random() * colors.length)];
+            this.color = p.color(c[0], c[1], c[2], this.alpha);
+            this.size = p.random(6, 16);
+            this.done = false;
+          }
+
+          update() {
+            this.pos.add(this.vel);
+            this.alpha -= 4;
+            if (this.alpha <= 0) this.done = true;
+          }
+
+          show(p) {
+            p.noStroke();
+            p.fill(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.alpha);
+            p.ellipse(this.pos.x, this.pos.y, this.size);
+            // 光の尾
+            p.stroke(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.alpha * 0.5);
+            p.line(this.pos.x, this.pos.y, this.pos.x - this.vel.x * 4, this.pos.y - this.vel.y * 4);
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
